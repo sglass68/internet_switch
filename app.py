@@ -11,6 +11,25 @@ DISABLED, ENABLED, UNKNOWN = range(3)
 state_names = ['disabled', 'enabled', 'unknown']
 
 
+'''
+mysql
+ apt-get install mysql-server
+ (enter root password for mysql server)
+
+ mysql -u root -p
+ (enter root password for mysql server)
+
+create database itimer;
+
+create user 'itimer'@'localhost' identified by 'itimer';
+grant all privileges on 'itimer'.* to 'itimer'@'localhost';
+
+create table record (start DATETIME(3), end DATETIME(3));
+
+create table state (enabled boolean, start datetime(3));
+
+'''
+
 class Internet(object):
     def __init__(self):
         self.state = UNKNOWN
