@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<script src="../static/js/jquery-3.3.1.min.js"></script>
+<script src="../static/js/signUp.js"></script>
+<script type=text/javascript>
+        $(function() {
+          $('a#enable').bind('click', function() {
+            $.getJSON('/enable',
+                function(data) {
+              //do nothing
+            });
+            return false;
+          });
+        });
+
+        $(function() {
+          $('a#disable').bind('click', function() {
+            $.getJSON('/disable',
+                function(data) {
+              //do nothing
+            });
+            return false;
+          });
+        });
+
+// Set the date we're counting down to
+var countDownDate = new Date("Sep 5, 2018 15:37:25").getTime();
+
+// Update the count down every 1 second
+var x = setInterval(function() {
+
+  // Get amount of time left
+  var distance = 137890
+
+  // Time calculations for days, hours, minutes and seconds
+  var hours = Math.floor(distance / (60 * 60));
+  var minutes = Math.floor(distance % (60 * 60) / 60);
+  var seconds = distance % 60;
+
+  // Display the result in the element with id="demo"
+  document.getElementById("demo").innerHTML = hours + "h "
+  + minutes + "m " + seconds + "s ";
+
+  // If the count down is finished, write some text
+  if (distance < 0) {
+    clearInterval(x);
+    document.getElementById("demo").innerHTML = "EXPIRED";
+  }
+}, 1000);
+
+</script>
+
+<head>
+    <title>Internet Timer</title>
+
+
+    <link href="http://getbootstrap.com/dist/css/bootstrap.min.css" rel="stylesheet">
+
+    <link href="http://getbootstrap.com/examples/jumbotron-narrow/jumbotron-narrow.css" rel="stylesheet">
+
+
+</head>
+
+<body>
+
+    <div class="container">
+        <div class="jumbotron">
+            <h1>Internet Timer</h1>
+            <p class="lead"></p>
+            <p id="demo"></p>
+            <form action="/enable/" method="post">
+                <p><a class="btn btn-lg btn-success" href="#" id="enable" role="button">Enable Internet</a>
+            </form>
+            <form action="/disable/" method="post">
+                <p><a class="btn btn-lg btn-danger" href="#" id="disable" role="button">Disable Internet</a>
+            </form>
+            </p>
+        </div>
+
+        <div class="row marketing">
+        </div>
+
+        <footer class="footer">
+            <p>Running on palo</p>
+        </footer>
+
+    </div>
+</body>
+
+</html>
