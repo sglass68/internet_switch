@@ -24,11 +24,11 @@
           });
         });
 
-// Update the count down every 1 second
-var x = setInterval(function() {
-
   // Get amount of time left
   var distance = '{{ time_remaining }}';
+
+// Update the count down every 1 second
+var x = setInterval(function() {
 
   // Time calculations for days, hours, minutes and seconds
   var hours = Math.floor(distance / (60 * 60));
@@ -38,6 +38,8 @@ var x = setInterval(function() {
   // Display the result in the element with id="demo"
   document.getElementById("demo").innerHTML = hours + "h "
   + minutes + "m " + seconds + "s ";
+
+  distance -= 1
 
   // If the count down is finished, write some text
   if (distance < 0) {
