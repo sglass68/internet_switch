@@ -51,6 +51,9 @@ class Internet(object):
         self.state = self.GetState()
         return state_names[self.state]
 
+    def SetState(self, state):
+        pass
+
 
 class Database(object):
     def __init__(self, app):
@@ -77,7 +80,6 @@ class Database(object):
         state, dt = rv[0]
         return state, dt - datetime.now()
 
-
 class MyServer(Flask):
     def __init__(self, *args, **kwargs):
         super(MyServer, self).__init__(*args, **kwargs)
@@ -90,17 +92,19 @@ class MyServer(Flask):
         self.db = Database(self)
 
         self.internet = Internet()
-        state = self.internet.CheckState()
+        inet_state = self.internet.CheckState()
         credit = self.db.GetCredit()
         debit = self.db.GetUsage()
         self.remaining = credit - debit
 
-        state, used = self.db.GetState()
-        if state:
+        db_state, used = self.db.GetState()
+        if db_state:
             self.remaining -= used.total_seconds()
         self.remaining = math.floor(self.remaining)
 
-        print 'Internet is %s, credit remaining %d' % (state, self.remaining)
+        self.internet.SetState(db_state)
+        self.state = db_state
+        print 'Internet is %s, credit remaining %d' % (db_state, self.remaining)
 
 
     def reset(self):
@@ -121,7 +125,7 @@ def disable():
 
 @app.route("/")
 def main():
-    return render_template('index.html', time_remaining=app.remaining)
+    return render_template('index.html', state=app.internet.state, time_remaining=app.remaining)
 
 
 if __name__ == "__main__":

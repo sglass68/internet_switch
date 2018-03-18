@@ -2,7 +2,6 @@
 <html lang="en">
 
 <script src="../static/js/jquery-3.3.1.min.js"></script>
-<script src="../static/js/signUp.js"></script>
 <script type=text/javascript>
         $(function() {
           $('a#enable').bind('click', function() {
@@ -26,26 +25,44 @@
 
   // Get amount of time left
   var distance = '{{ time_remaining }}';
+  var state = '{{ state }}'
 
 // Update the count down every 1 second
 var x = setInterval(function() {
+
+  var enable = document.getElementById("enable");
+  var disable = document.getElementById("disable");
+  var state_msg = document.getElementById("state_msg");
+
+  if (state == 0) {
+    //disable.style.opacity = 0;
+    enable.style.opacity = 1;
+    state_msg.innerHTML = 'Internet DISABLED';
+  } else {
+    //disable.style.opacity = 1;
+    enable.style.opacity = 0;
+    state_msg.innerHTML = 'Internet enabled';
+  }
 
   // Time calculations for days, hours, minutes and seconds
   var hours = Math.floor(distance / (60 * 60));
   var minutes = Math.floor(distance % (60 * 60) / 60);
   var seconds = distance % 60;
 
-  // Display the result in the element with id="demo"
-  document.getElementById("demo").innerHTML = hours + "h "
+  // Display the result in the element with id="timer"
+  document.getElementById("timer").innerHTML = "Remaining time: " + hours + "h "
   + minutes + "m " + seconds + "s ";
 
-  distance -= 1
+  if (state != 0) {
+    distance -= 1;
+  }
 
   // If the count down is finished, write some text
-  if (distance < 0) {
+  if (distance <= 0) {
     clearInterval(x);
-    document.getElementById("demo").innerHTML = "EXPIRED";
+    document.getElementById("timer").innerHTML = "Remaining time: None";
   }
+
 }, 1000);
 
 </script>
@@ -56,8 +73,6 @@ var x = setInterval(function() {
 
     <link href="http://getbootstrap.com/dist/css/bootstrap.min.css" rel="stylesheet">
 
-    <link href="http://getbootstrap.com/examples/jumbotron-narrow/jumbotron-narrow.css" rel="stylesheet">
-
 
 </head>
 
@@ -67,7 +82,8 @@ var x = setInterval(function() {
         <div class="jumbotron">
             <h1>Internet Timer</h1>
             <p class="lead"></p>
-            <p id="demo"></p>
+            <p id="state_msg"></p>
+            <p id="timer"></p>
             <form action="/enable/" method="post">
                 <p><a class="btn btn-lg btn-success" href="#" id="enable" role="button">Enable Internet</a>
             </form>
