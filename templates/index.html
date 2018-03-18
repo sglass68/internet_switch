@@ -24,14 +24,11 @@
           });
         });
 
-// Set the date we're counting down to
-var countDownDate = new Date("Sep 5, 2018 15:37:25").getTime();
-
 // Update the count down every 1 second
 var x = setInterval(function() {
 
   // Get amount of time left
-  var distance = 137890
+  var distance = '{{ time_remaining }}';
 
   // Time calculations for days, hours, minutes and seconds
   var hours = Math.floor(distance / (60 * 60));

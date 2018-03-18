@@ -1,7 +1,8 @@
 
+from datetime import datetime
 from flask import Flask, render_template
 from flask.ext.mysql import MySQL
-
+import math
 import subprocess
 
 TARGET_IP = '192.168.4.16'
@@ -24,11 +25,16 @@ create database itimer;
 create user 'itimer'@'localhost' identified by 'itimer';
 grant all privileges on 'itimer'.* to 'itimer'@'localhost';
 
-create table record (start DATETIME(3), end DATETIME(3));
+create table record (start datetime(3), end datetime(3), duration int);
 
 create table state (enabled boolean, start datetime(3));
 
+create table credit (created datetime, seconds int);
+
 '''
+
+time_remaining = None
+
 
 class Internet(object):
     def __init__(self):
@@ -43,7 +49,34 @@ class Internet(object):
 
     def CheckState(self):
         self.state = self.GetState()
-        print 'Internet is %s' % state_names[self.state]
+        return state_names[self.state]
+
+
+class Database(object):
+    def __init__(self, app):
+        self.mysql = MySQL()
+        self.mysql.init_app(app)
+        self.con = self.mysql.connect()
+        self.cur = self.con.cursor()
+
+    def GetCredit(self):
+        self.cur.execute('select sum(seconds) from credit;')
+        rv = self.cur.fetchall()[0][0]
+        return rv and int(rv) or 0
+
+    def GetUsage(self):
+        self.cur.execute('select sum(duration) from record;')
+        rv = self.cur.fetchall()[0][0]
+        return rv and int(rv) or 0
+
+    def GetState(self):
+        self.cur.execute('select * from state;')
+        rv = self.cur.fetchall()
+        if not rv:
+            return DISABLED, 0
+        state, dt = rv[0]
+        return state, dt - datetime.now()
+
 
 class MyServer(Flask):
     def __init__(self, *args, **kwargs):
@@ -54,11 +87,20 @@ class MyServer(Flask):
         self.config['MYSQL_DATABASE_PASSWORD'] = 'itimer'
         self.config['MYSQL_DATABASE_DB'] = 'itimer'
         self.config['MYSQL_DATABASE_HOST'] = 'localhost'
-        mysql = MySQL()
-        mysql.init_app(self)
+        self.db = Database(self)
 
         self.internet = Internet()
-        self.internet.CheckState()
+        state = self.internet.CheckState()
+        credit = self.db.GetCredit()
+        debit = self.db.GetUsage()
+        self.remaining = credit - debit
+
+        state, used = self.db.GetState()
+        if state:
+            self.remaining -= used.total_seconds()
+        self.remaining = math.floor(self.remaining)
+
+        print 'Internet is %s, credit remaining %d' % (state, self.remaining)
 
 
     def reset(self):
@@ -79,7 +121,7 @@ def disable():
 
 @app.route("/")
 def main():
-    return render_template('index.html')
+    return render_template('index.html', time_remaining=app.remaining)
 
 
 if __name__ == "__main__":
