@@ -1,6 +1,7 @@
 
 from datetime import datetime
 from flask import Flask, render_template
+from flask.ext.socketio import SocketIO, emit
 from flask.ext.mysql import MySQL
 import math
 import subprocess
@@ -97,6 +98,9 @@ class MyServer(Flask):
         debit = self.db.GetUsage()
         self.remaining = credit - debit
 
+        self.config['SECRET_KEY'] = 'secret!'
+        self.socketio = SocketIO(self)
+
         db_state, used = self.db.GetState()
         if db_state:
             self.remaining -= used.total_seconds()
@@ -106,27 +110,45 @@ class MyServer(Flask):
         self.state = db_state
         print 'Internet is %s, credit remaining %d' % (db_state, self.remaining)
 
-
     def reset(self):
         self.string = "hello"
 
+    def SetEnable(enable):
+
 
 app = MyServer(__name__)
+socketio = SocketIO(app)
+
+def SendState():
+    emit('server status', {'state': app.state, 'remaining': app.remaining})
 
 @app.route('/enable')
 def enable():
-    print "Enabling internet"
-    return "nothing"
+    app.SetEnable(True)
 
 @app.route('/disable')
 def disable():
-    print "Disabling internet"
-    return "nothing"
+    app.SetEnable(False)
+
+@socketio.on('connect')
+def test_connect():
+    print 'Client connected'
+    SendState()
+
+@socketio.on('disconnect')
+def test_disconnect():
+    print 'Client disconnected'
+
+@socketio.on('change')
+def change(message):
+    SendState()
+
 
 @app.route("/")
 def main():
-    return render_template('index.html', state=app.internet.state, time_remaining=app.remaining)
+    return render_template('index.html', state=app.internet.state,
+                           time_remaining=app.remaining)
 
 
 if __name__ == "__main__":
-    app.run(host='192.168.4.1')
+    socketio.run(app, host='192.168.4.1')

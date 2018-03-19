@@ -2,7 +2,11 @@
 <html lang="en">
 
 <script src="../static/js/jquery-3.3.1.min.js"></script>
+<script type="text/javascript" src="//cdnjs.cloudflare.com/ajax/libs/socket.io/1.3.5/socket.io.min.js"></script>
 <script type=text/javascript>
+    var state;
+    var distance;
+
         $(function() {
           $('a#enable').bind('click', function() {
             $.getJSON('/enable',
@@ -23,9 +27,18 @@
           });
         });
 
-  // Get amount of time left
-  var distance = '{{ time_remaining }}';
-  var state = '{{ state }}'
+$(document).ready(function(){
+    var socket = io.connect('http://' + document.domain + ':' + location.port);
+    socket.on('server status', function(msg) {
+        state = msg.state;
+        distance = msg.remaining;
+        $('#log').append('<p>Received: ' + state + ' ' + distance + '</p>');
+    });
+    $('form#emit').submit(function(event) {
+        socket.emit('client status', {data: $('#emit_data').val()});
+        return false;
+    });
+});
 
 // Update the count down every 1 second
 var x = setInterval(function() {
@@ -91,6 +104,7 @@ var x = setInterval(function() {
                 <p><a class="btn btn-lg btn-danger" href="#" id="disable" role="button">Disable Internet</a>
             </form>
             </p>
+            <p id="log">Log:</p>
         </div>
 
         <div class="row marketing">
