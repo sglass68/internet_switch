@@ -4,6 +4,7 @@ from flask import Flask, render_template
 from flask.ext.socketio import SocketIO, emit
 from flask.ext.mysql import MySQL
 import math
+from multiprocessing import Process
 import subprocess
 
 TARGET_IP = '192.168.4.16'
@@ -105,10 +106,15 @@ class Database(object):
             return
         cmd = ("insert into record (start, end, duration) values ('%s', now(), %d);"
                          % (start.strftime('%Y-%m-%d %H:%M:%S'), (datetime.now() - start).total_seconds()))
-        print cmd
         self.cur.execute(cmd)
         self.cur.execute('delete from state;')
         self.con.commit()
+
+    def GetRemaining(self):
+        """Get the remaining internet time in seconds"""
+        credit = self.GetCredit()
+        debit = self.GetUsage()
+        return credit - debit
 
 
 class MyServer(Flask):
@@ -124,9 +130,7 @@ class MyServer(Flask):
 
         self.internet = Internet()
         inet_state = self.internet.CheckState()
-        credit = self.db.GetCredit()
-        debit = self.db.GetUsage()
-        self.remaining = credit - debit
+        self.remaining = self.db.GetRemaining()
 
         self.config['SECRET_KEY'] = 'secret!'
         self.socketio = SocketIO(self)
@@ -134,6 +138,13 @@ class MyServer(Flask):
         db_state, used = self.db.GetUsed()
         self.remaining -= used
 
+        # If the database thinks the internet is off, check if it really is
+        if not db_state:
+            db_state = inet_state
+            # The internet is on, so record NOW as the time that this session
+            # started.
+            if inet_state:
+                self.db.RecordEnableTime()
         self.internet.SetState(db_state)
         self.state = db_state
         print 'Internet is %s, credit remaining %d' % (db_state, self.remaining)
@@ -151,6 +162,7 @@ class MyServer(Flask):
             self.db.RecordSession()
             self.internet.SetState(False)
         self.state = enable
+        self.remaining = self.db.GetRemaining()
 
 
 app = MyServer(__name__)
@@ -189,6 +201,14 @@ def set_enable(state):
 def main():
     return render_template('index.html')
 
+def StartServer():
+    socketio.run(app, host='192.168.4.1')
+
+def MainProgram():
+    server = Process(target=StartServer)
+    server.start()
+    server.join()
+
 
 if __name__ == "__main__":
-    socketio.run(app, host='192.168.4.1')
+    MainProgram()
