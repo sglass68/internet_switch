@@ -6,6 +6,8 @@
 <script type=text/javascript>
 var state;
 var distance;
+var active;
+var packets;
 var log_lines = [];
 
 function append_log(msg) {
@@ -49,7 +51,7 @@ var x = setInterval(function() {
   var disable = document.getElementById("disable");
   var state_msg = document.getElementById("state_msg");
 
-  if (state) {
+  if (state == 1) {
     disable.style.opacity = 1;
     enable.style.opacity = 0;
     enable_str = 'enabled'
@@ -76,7 +78,6 @@ var x = setInterval(function() {
 
   // If the count down is finished, write some text
   if (distance <= 0) {
-    clearInterval(x);
     document.getElementById("timer").innerHTML = "Remaining time: None";
   }
 

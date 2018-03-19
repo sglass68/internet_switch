@@ -11,6 +11,7 @@ from threading import Timer, Thread
 
 TARGET_IP = '192.168.4.16'
 DUMP_IP = '192.168.4.7'
+#DUMP_IP = TARGET_IP
 TIMER_PERIOD = 3
 
 DISABLED, ENABLED, UNKNOWN = range(3)
@@ -30,10 +31,15 @@ create database itimer;
 create user 'itimer'@'localhost' identified by 'itimer';
 grant all privileges on 'itimer'.* to 'itimer'@'localhost';
 
+# Records all usage of the internet
 create table record (start datetime(3), end datetime(3), duration int);
 
+# Records when the Internet was turned on (so we know how much has been used
+# since then)
 create table state (enabled boolean, start datetime(3));
 
+# Records all credits given for Internet (e.g. to credit an hour a day, add a
+# record here wth seconds 3600 at the start of each day)
 create table credit (created datetime, seconds int);
 
 '''
@@ -42,10 +48,21 @@ time_remaining = None
 
 
 class Internet(object):
+    """Manages the internet connection
+
+    Properties:
+        state: Current state of the internet (DISABLED, ENABLED, UNKNOWN)
+    """
     def __init__(self):
         self.state = UNKNOWN
 
     def GetState(self):
+        """Get the current state of the internet
+
+        Returns:
+            State, as detected by firewall inspection
+        """
+        # If we see a DROP line for the target IP then the internet is off.
         out = subprocess.check_output(['sudo', 'iptables', '-L', '-n'])
         match = [line for line in out.splitlines() if TARGET_IP in line]
         if [line for line in match if 'DROP' in line]:
@@ -53,14 +70,26 @@ class Internet(object):
         return ENABLED
 
     def CheckState(self):
+        """Check the current state
+
+        Returns:
+            Internet state (ENABLED, DISABLED, UNKNOWN)
+        """
         self.state = self.GetState()
-        return state_names[self.state]
+        return self.state
 
     def SetState(self, state):
+        """Set the state of the internet
+
+        Args:
+            state: New state to set
+        """
         print 'Setting internet state to', state
+        # TODO: Implement this
 
 
 class Database(object):
+    """Handles communication with the mysql database"""
     def __init__(self, app):
         self.mysql = MySQL()
         self.mysql.init_app(app)
@@ -68,17 +97,37 @@ class Database(object):
         self.cur = self.con.cursor()
 
     def GetCredit(self):
+        """Get the total credits added
+
+        Returns:
+            Total credits added, in seconds
+        """
         self.cur.execute('select sum(seconds) from credit;')
         rv = self.cur.fetchall()[0][0]
         return rv and int(rv) or 0
 
     def GetUsage(self):
+        """Get the total internet usage according to the database
+
+        Returns:
+            Total usage in seconds
+        """
         self.cur.execute('select sum(duration) from record;')
         rv = self.cur.fetchall()[0][0]
         return rv and int(rv) or 0
 
     def GetState(self):
-        """Get the current internet state, and when that state was set"""
+        """Get the current internet state, and when that state was set
+
+        A state change is written to the 'state' table when the Internet is
+        enabled. It is removed when the Internet is disabled. So if there is
+        a state record, we know that the Internet was enabled at some point.
+
+        Returns:
+            tuple:
+                State (DISABLED or ENABLED)
+                Time of last state change (0 if disabled)
+        """
         self.cur.execute('select * from state;')
         rv = self.cur.fetchall()
         if not rv:
@@ -87,7 +136,11 @@ class Database(object):
         return state, dt
 
     def GetUsed(self):
-        """Return the duration of internet that is used but not recorded yet"""
+        """Return the duration of internet that is used but not recorded yet
+
+        Returns:
+            Duration in seconds since the Internet was started
+        """
         state, dt = self.GetState()
         if not state:
             return 0, 0
@@ -114,7 +167,14 @@ class Database(object):
         self.con.commit()
 
     def GetRemaining(self):
-        """Get the remaining internet time in seconds"""
+        """Get the remaining internet time in seconds
+
+        This totals all credits, subtracts all usage and also subtracts any
+        pending usage (the time since the Internet was started).
+
+        Returns:
+            Remaining time in seconds
+        """
         credit = self.GetCredit()
         debit = self.GetUsage()
         db_state, used = self.GetUsed()
@@ -122,6 +182,7 @@ class Database(object):
 
 
 class MyServer(Flask):
+    """This is the Flash server"""
     def __init__(self, *args, **kwargs):
         super(MyServer, self).__init__(*args, **kwargs)
         self.reset()
@@ -140,7 +201,6 @@ class MyServer(Flask):
         self.socketio = SocketIO(self)
 
         db_state, used = self.db.GetUsed()
-        self.remaining -= used
 
         # If the database thinks the internet is off, check if it really is
         if not db_state:
@@ -154,9 +214,14 @@ class MyServer(Flask):
         print 'Internet is %s, credit remaining %d' % (db_state, self.remaining)
 
     def reset(self):
-        self.string = "hello"
+        pass
 
     def SetEnable(self, enable):
+        """Set the Internet to enabled or disabled
+
+        Args:
+            enable: desired new state (ENABLED or DISABLED)
+        """
         if enable == self.state:
             return
         if enable:
@@ -169,7 +234,8 @@ class MyServer(Flask):
         self.UpdateRemaining()
 
     def UpdateRemaining(self):
-       self.remaining = self.db.GetRemaining()
+        """Update the amount of remaining Internet time"""
+        self.remaining = self.db.GetRemaining()
 
 
 app = MyServer(__name__)
@@ -177,21 +243,12 @@ socketio = SocketIO(app)
 packets = Value('i', 0)
 
 def SendState():
+    """Tell the UI about the new state"""
     socketio.emit('server status',
          {'state': app.state,
           'remaining': app.remaining,
           'packets': packets.value / TIMER_PERIOD,
           'active': '(in use)' if packets.value > 20 else '(idle)'})
-
-#@app.route('/enable')
-#def enable():
-    #app.SetEnable(True)
-    #return ''
-
-#@app.route('/disable')
-#def disable():
-    #app.SetEnable(False)
-    #return ''
 
 @socketio.on('connect')
 def test_connect():
@@ -204,51 +261,66 @@ def test_disconnect():
 
 @socketio.on('set enable')
 def set_enable(state):
+    """Handle a call from the UI to enable/disable the Internet"""
     enable = state['enable']
     app.SetEnable(enable)
     SendState()
 
 @app.route("/")
 def main():
+    """This is our main page"""
     return render_template('index.html')
 
 def SendUpdate():
+    """Timer function to send an update to the UI"""
     app.UpdateRemaining()
+    if app.remaining < 0:
+        app.SetEnable(DISABLED)
     SendState()
-    packets.value = 0
+    packets.value = 0   # Reset the packet count for next time
 
-class perpetualTimer():
-   def __init__(self,t,hFunction):
-      self.t=t
-      self.hFunction = hFunction
-      self.thread = Timer(self.t,self.handle_function)
+class PerpetualTimer():
+    """A handy class for a repeating timer"""
+    def __init__(self,t,hFunction):
+        self.t=t
+        self.hFunction = hFunction
+        self.thread = Timer(self.t,self.handle_function)
 
-   def handle_function(self):
-      self.hFunction()
-      self.thread = Timer(self.t,self.handle_function)
-      self.thread.start()
+    def handle_function(self):
+        self.hFunction()
+        self.thread = Timer(self.t,self.handle_function)
+        self.thread.start()
 
-   def start(self):
-      self.thread.start()
+    def start(self):
+        self.thread.start()
 
-   def cancel(self):
-      self.thread.cancel()
+    def cancel(self):
+        self.thread.cancel()
+
 
 def StartServer():
-    perpetualTimer(TIMER_PERIOD, SendUpdate).start()
+    """Start the Flask server along with an update timer for the UI"""
+    PerpetualTimer(TIMER_PERIOD, SendUpdate).start()
     socketio.run(app, host='192.168.4.1')
 
 def WatchOutput(stream, lines):
+    """Called when we get output from our tcpdump"""
+    # Count the number of lines in this output, which equals the number of
+    # network packets detected
     packets.value += lines.count('\n')
 
 def Monitor():
-    args = ['sudo', 'tcpdump', '-i', 'eth0', 'host', DUMP_IP, 'and', 'udp', '-n']
+    """Process to watch Internet traffic"""
+    args = ['sudo', 'tcpdump', '-i', 'eth0', 'host', DUMP_IP, 'and', 'udp',
+            '-n']
     pipe = cros_subprocess.Popen(args)
+    # Call WatchOutput() with any output
     pipe.CommunicateFilter(WatchOutput)
     pipe.wait()
 
 
 def MainProgram():
+    """Main program with two processes: a Flask server and a packet watcher"""
     server = Process(target=StartServer)
     monitor = Process(target=Monitor)
     server.start()
