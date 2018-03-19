@@ -3,9 +3,12 @@ Simple Python web app to implement an internet timer and switch
 Functionality:
 
 - Provides a web page showing the status of the internet
-- Maintains a credit amount of internet (measured in seconds)
+- Maintains a credit amount of internet (measured in seconds) using mysql
 - When the internet is enabled, the credit counts down
 - The internet can be enabled/disabled using buttons
 - When the credit is exhausted the internet is automatically disabled and
     cannot be enabled until more credit is available
+- Monitors packet flow on the internet to measure activity
+     (at some point this could automatically disable the internet when not in
+      use)
 
