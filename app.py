@@ -1,14 +1,16 @@
 
+import cros_subprocess
 from datetime import datetime
 from flask import Flask, render_template
 from flask.ext.socketio import SocketIO, emit
 from flask.ext.mysql import MySQL
 import math
-from multiprocessing import Process
+from multiprocessing import Process, Value
 import subprocess
+from threading import Timer, Thread
 
 TARGET_IP = '192.168.4.16'
-
+DUMP_IP = '192.168.4.7'
 
 DISABLED, ENABLED, UNKNOWN = range(3)
 state_names = ['disabled', 'enabled', 'unknown']
@@ -88,7 +90,7 @@ class Database(object):
         state, dt = self.GetState()
         if not state:
             return 0, 0
-        return 1, math.floor((dt - datetime.now()).total_seconds())
+        return 1, math.floor((datetime.now() - dt).total_seconds())
 
     def RecordEnableTime(self):
         """Record that we have started a new internet session"""
@@ -114,7 +116,8 @@ class Database(object):
         """Get the remaining internet time in seconds"""
         credit = self.GetCredit()
         debit = self.GetUsage()
-        return credit - debit
+        db_state, used = self.GetUsed()
+        return credit - debit - used
 
 
 class MyServer(Flask):
@@ -162,14 +165,21 @@ class MyServer(Flask):
             self.db.RecordSession()
             self.internet.SetState(False)
         self.state = enable
-        self.remaining = self.db.GetRemaining()
+        self.UpdateRemaining()
+
+    def UpdateRemaining(self):
+       self.remaining = self.db.GetRemaining()
 
 
 app = MyServer(__name__)
 socketio = SocketIO(app)
+packets = Value('i', 0)
 
 def SendState():
-    emit('server status', {'state': app.state, 'remaining': app.remaining})
+    socketio.emit('server status',
+         {'state': app.state,
+          'remaining': app.remaining,
+          'active': '(in use)' if packets.value > 20 else '(idle)'})
 
 #@app.route('/enable')
 #def enable():
@@ -201,13 +211,49 @@ def set_enable(state):
 def main():
     return render_template('index.html')
 
+def SendUpdate():
+    app.UpdateRemaining()
+    SendState()
+    packets.value = 0
+
+class perpetualTimer():
+   def __init__(self,t,hFunction):
+      self.t=t
+      self.hFunction = hFunction
+      self.thread = Timer(self.t,self.handle_function)
+
+   def handle_function(self):
+      self.hFunction()
+      self.thread = Timer(self.t,self.handle_function)
+      self.thread.start()
+
+   def start(self):
+      self.thread.start()
+
+   def cancel(self):
+      self.thread.cancel()
+
 def StartServer():
+    perpetualTimer(10, SendUpdate).start()
     socketio.run(app, host='192.168.4.1')
+
+def WatchOutput(stream, lines):
+    packets.value += lines.count('\n')
+
+def Monitor():
+    args = ['sudo', 'tcpdump', '-i', 'eth0', 'host', DUMP_IP, 'and', 'udp', '-n']
+    pipe = cros_subprocess.Popen(args)
+    pipe.CommunicateFilter(WatchOutput)
+    pipe.wait()
+
 
 def MainProgram():
     server = Process(target=StartServer)
+    monitor = Process(target=Monitor)
     server.start()
+    monitor.start()
     server.join()
+    monitor.join()
 
 
 if __name__ == "__main__":

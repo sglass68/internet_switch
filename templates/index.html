@@ -12,7 +12,8 @@ $(document).ready(function(){
     socket.on('server status', function(msg) {
         state = msg.state;
         distance = msg.remaining;
-        $('#log').append('<br>Received: ' + state + ' ' + distance);
+        active = msg.active;
+        $('#log').append('<br>Received: ' + state + ' ' + distance + ' ' + active);
     });
     $('#turnon').submit(function(event) {
         socket.emit('set enable', {enable: true});
@@ -36,12 +37,13 @@ var x = setInterval(function() {
   if (state) {
     disable.style.opacity = 1;
     enable.style.opacity = 0;
-    state_msg.innerHTML = 'Internet enabled';
+    enable_str = 'enabled'
   } else {
     disable.style.opacity = 0;
     enable.style.opacity = 1;
-    state_msg.innerHTML = 'Internet DISABLED';
+    enable_str = 'DISABLED';
   }
+  state_msg.innerHTML = 'Internet ' + enable_str + ' ' + active;
 
   // Time calculations for days, hours, minutes and seconds
   var hours = Math.floor(distance / (60 * 60));
