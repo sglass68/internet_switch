@@ -53,7 +53,7 @@ class Internet(object):
         return state_names[self.state]
 
     def SetState(self, state):
-        pass
+        print 'Setting internet state to', state
 
 
 class Database(object):
@@ -74,12 +74,37 @@ class Database(object):
         return rv and int(rv) or 0
 
     def GetState(self):
+        """Get the current internet state, and when that state was set"""
         self.cur.execute('select * from state;')
         rv = self.cur.fetchall()
         if not rv:
             return DISABLED, 0
         state, dt = rv[0]
-        return state, dt - datetime.now()
+        return state, dt
+
+    def GetUsed(self):
+        """Return the duration of internet that is used but not recorded yet"""
+        state, dt = self.GetState()
+        if not state:
+            return 0, 0
+        return 1, math.floor((dt - datetime.now()).total_seconds())
+
+    def RecordEnableTime(self):
+        """Record that we have started a new internet session"""
+        self.cur.execute('delete from state;')
+        self.cur.execute('insert into state (enabled, start) values (true, now());')
+
+    def RecordSession(self):
+        """Record that the internet session has ended"""
+        state, start = self.GetState()
+        if state == DISABLED:
+            # We did not write a record at the start of the session, so don't
+            # know when it began
+            print 'Missing record in "state" table'
+            return
+        self.cur.execute('insert into record (start, end, duration) values ("%s", now(), %d);'
+                         % (start.strftime('%Y-%m-%d %H:%M:%S'), (datetime.now() - start).total_seconds()))
+
 
 class MyServer(Flask):
     def __init__(self, *args, **kwargs):
@@ -101,10 +126,8 @@ class MyServer(Flask):
         self.config['SECRET_KEY'] = 'secret!'
         self.socketio = SocketIO(self)
 
-        db_state, used = self.db.GetState()
-        if db_state:
-            self.remaining -= used.total_seconds()
-        self.remaining = math.floor(self.remaining)
+        db_state, used = self.db.GetUsed()
+        self.remaining -= used
 
         self.internet.SetState(db_state)
         self.state = db_state
@@ -113,7 +136,16 @@ class MyServer(Flask):
     def reset(self):
         self.string = "hello"
 
-    def SetEnable(enable):
+    def SetEnable(self, enable):
+        if enable == self.state:
+            return
+        if enable:
+            self.db.RecordEnableTime()
+            self.internet.SetState(True)
+        else:
+            self.db.RecordSession()
+            self.internet.SetState(False)
+        self.state = enable
 
 
 app = MyServer(__name__)
@@ -125,10 +157,12 @@ def SendState():
 @app.route('/enable')
 def enable():
     app.SetEnable(True)
+    return ''
 
 @app.route('/disable')
 def disable():
     app.SetEnable(False)
+    return ''
 
 @socketio.on('connect')
 def test_connect():
@@ -140,14 +174,12 @@ def test_disconnect():
     print 'Client disconnected'
 
 @socketio.on('change')
-def change(message):
+def change():
     SendState()
-
 
 @app.route("/")
 def main():
-    return render_template('index.html', state=app.internet.state,
-                           time_remaining=app.remaining)
+    return render_template('index.html')
 
 
 if __name__ == "__main__":
