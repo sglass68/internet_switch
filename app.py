@@ -93,6 +93,7 @@ class Database(object):
         """Record that we have started a new internet session"""
         self.cur.execute('delete from state;')
         self.cur.execute('insert into state (enabled, start) values (true, now());')
+        self.con.commit()
 
     def RecordSession(self):
         """Record that the internet session has ended"""
@@ -102,8 +103,12 @@ class Database(object):
             # know when it began
             print 'Missing record in "state" table'
             return
-        self.cur.execute('insert into record (start, end, duration) values ("%s", now(), %d);'
+        cmd = ("insert into record (start, end, duration) values ('%s', now(), %d);"
                          % (start.strftime('%Y-%m-%d %H:%M:%S'), (datetime.now() - start).total_seconds()))
+        print cmd
+        self.cur.execute(cmd)
+        self.cur.execute('delete from state;')
+        self.con.commit()
 
 
 class MyServer(Flask):
@@ -154,15 +159,15 @@ socketio = SocketIO(app)
 def SendState():
     emit('server status', {'state': app.state, 'remaining': app.remaining})
 
-@app.route('/enable')
-def enable():
-    app.SetEnable(True)
-    return ''
+#@app.route('/enable')
+#def enable():
+    #app.SetEnable(True)
+    #return ''
 
-@app.route('/disable')
-def disable():
-    app.SetEnable(False)
-    return ''
+#@app.route('/disable')
+#def disable():
+    #app.SetEnable(False)
+    #return ''
 
 @socketio.on('connect')
 def test_connect():
@@ -173,8 +178,11 @@ def test_connect():
 def test_disconnect():
     print 'Client disconnected'
 
-@socketio.on('change')
-def change():
+@socketio.on('set enable')
+def set_enable(state):
+    enable = state['enable']
+    print 'state', enable
+    app.SetEnable(enable)
     SendState()
 
 @app.route("/")

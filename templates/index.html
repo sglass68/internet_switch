@@ -4,38 +4,24 @@
 <script src="../static/js/jquery-3.3.1.min.js"></script>
 <script type="text/javascript" src="//cdnjs.cloudflare.com/ajax/libs/socket.io/1.3.5/socket.io.min.js"></script>
 <script type=text/javascript>
-    var state;
-    var distance;
-
-        $(function() {
-          $('a#enable').bind('click', function() {
-            $.getJSON('/enable',
-                function(data) {
-              //do nothing
-            });
-            return false;
-          });
-        });
-
-        $(function() {
-          $('a#disable').bind('click', function() {
-            $.getJSON('/disable',
-                function(data) {
-              //do nothing
-            });
-            return false;
-          });
-        });
+var state;
+var distance;
 
 $(document).ready(function(){
     var socket = io.connect('http://' + document.domain + ':' + location.port);
     socket.on('server status', function(msg) {
         state = msg.state;
         distance = msg.remaining;
-        $('#log').append('<p>Received: ' + state + ' ' + distance + '</p>');
+        $('#log').append('<br>Received: ' + state + ' ' + distance);
     });
-    $('form#emit').submit(function(event) {
-        socket.emit('client status', {data: $('#emit_data').val()});
+    $('#turnon').submit(function(event) {
+        socket.emit('set enable', {enable: true});
+        $('#log').append('<br>Sent: enable: True');
+        return false;
+    });
+    $('#turnoff').submit(function(event) {
+        socket.emit('set enable', {enable: false});
+        $('#log').append('<br>Sent: enable: False');
         return false;
     });
 });
@@ -47,14 +33,14 @@ var x = setInterval(function() {
   var disable = document.getElementById("disable");
   var state_msg = document.getElementById("state_msg");
 
-  if (state == 0) {
-    //disable.style.opacity = 0;
-    enable.style.opacity = 1;
-    state_msg.innerHTML = 'Internet DISABLED';
-  } else {
-    //disable.style.opacity = 1;
+  if (state) {
+    disable.style.opacity = 1;
     enable.style.opacity = 0;
     state_msg.innerHTML = 'Internet enabled';
+  } else {
+    disable.style.opacity = 0;
+    enable.style.opacity = 1;
+    state_msg.innerHTML = 'Internet DISABLED';
   }
 
   // Time calculations for days, hours, minutes and seconds
@@ -97,11 +83,11 @@ var x = setInterval(function() {
             <p class="lead"></p>
             <p id="state_msg"></p>
             <p id="timer"></p>
-            <form action="/enable/" method="post">
-                <p><a class="btn btn-lg btn-success" href="#" id="enable" role="button">Enable Internet</a>
+            <form id="turnon" action="#" method="post">
+                <input type="submit" class="btn btn-lg btn-success" href="#" id="enable" role="button" value="Enable Internet">
             </form>
-            <form action="/disable/" method="post">
-                <p><a class="btn btn-lg btn-danger" href="#" id="disable" role="button">Disable Internet</a>
+            <form id="turnoff" action="#" method="post">
+                <input type="submit" class="btn btn-lg btn-danger" href="#" id="disable" role="button" value="Disable Internet">
             </form>
             </p>
             <p id="log">Log:</p>
