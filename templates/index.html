@@ -6,6 +6,19 @@
 <script type=text/javascript>
 var state;
 var distance;
+var log_lines = [];
+
+function append_log(msg) {
+    log_lines.unshift(msg)
+    if (log_lines.length > 10) {
+       log_lines.pop()
+    }
+    text = ''
+    for (line of log_lines) {
+       text += line
+    }
+    document.getElementById('log').innerHTML = text
+}
 
 $(document).ready(function(){
     var socket = io.connect('http://' + document.domain + ':' + location.port);
@@ -13,16 +26,18 @@ $(document).ready(function(){
         state = msg.state;
         distance = msg.remaining;
         active = msg.active;
-        $('#log').append('<br>Received: ' + state + ' ' + distance + ' ' + active);
+        packets = msg.packets
+        append_log('<br>Received: ' + state + ' ' + distance + ' ' + active +
+                   ' ' + packets)
     });
     $('#turnon').submit(function(event) {
         socket.emit('set enable', {enable: true});
-        $('#log').append('<br>Sent: enable: True');
+        append_log('<br>Sent: enable: True');
         return false;
     });
     $('#turnoff').submit(function(event) {
         socket.emit('set enable', {enable: false});
-        $('#log').append('<br>Sent: enable: False');
+        append_log('<br>Sent: enable: False');
         return false;
     });
 });
@@ -43,7 +58,8 @@ var x = setInterval(function() {
     enable.style.opacity = 1;
     enable_str = 'DISABLED';
   }
-  state_msg.innerHTML = 'Internet ' + enable_str + ' ' + active;
+  state_msg.innerHTML = 'Internet ' + enable_str + ' ' + active +
+                        ' (' + packets + ' pps)';
 
   // Time calculations for days, hours, minutes and seconds
   var hours = Math.floor(distance / (60 * 60));

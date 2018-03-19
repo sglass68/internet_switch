@@ -11,6 +11,7 @@ from threading import Timer, Thread
 
 TARGET_IP = '192.168.4.16'
 DUMP_IP = '192.168.4.7'
+TIMER_PERIOD = 3
 
 DISABLED, ENABLED, UNKNOWN = range(3)
 state_names = ['disabled', 'enabled', 'unknown']
@@ -179,6 +180,7 @@ def SendState():
     socketio.emit('server status',
          {'state': app.state,
           'remaining': app.remaining,
+          'packets': packets.value / TIMER_PERIOD,
           'active': '(in use)' if packets.value > 20 else '(idle)'})
 
 #@app.route('/enable')
@@ -203,7 +205,6 @@ def test_disconnect():
 @socketio.on('set enable')
 def set_enable(state):
     enable = state['enable']
-    print 'state', enable
     app.SetEnable(enable)
     SendState()
 
@@ -234,7 +235,7 @@ class perpetualTimer():
       self.thread.cancel()
 
 def StartServer():
-    perpetualTimer(10, SendUpdate).start()
+    perpetualTimer(TIMER_PERIOD, SendUpdate).start()
     socketio.run(app, host='192.168.4.1')
 
 def WatchOutput(stream, lines):
